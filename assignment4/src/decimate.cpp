@@ -2,7 +2,10 @@
 #include <iostream>
 #include <set>
 #include <float.h>
+#include <Eigen/Core>
+#include <Eigen/Dense>
 using namespace OpenMesh;
+using namespace Eigen;
 
 VPropHandleT<Quadricd> vquadric;
 VPropHandleT<float> vprio;
@@ -87,7 +90,42 @@ void initDecimation(Mesh &mesh) {
 
         // INSERT CODE HERE FOR PART 1-------------------------------------------------------------------------------
 		// calc vertex quadrics from incident triangles
-		// ----------------------------------------------------------------------------------------------------------
+		//
+        Vec3f pm = mesh.point(v_it.handle());
+        Vector4f p(pm[0], pm[1], pm[2], 1);
+
+        OpenMesh::Vec3f points[2];
+
+        for(Mesh::VertexFaceIter f_it = mesh.vf_iter(v_it.handle()); f_it; ++f_it) {
+
+            Mesh::ConstFaceVertexIter cfv_it;
+            cfv_it = mesh.cfv_iter(f_it.handle());
+            points[0] = mesh.point(cfv_it.handle());
+            points[1] = mesh.point((++cfv_it).handle());
+            points[2] = mesh.point((++cfv_it).handle());
+    
+            Vector3d P(points[0][0], points[0][1], points[0][2]);
+            Vector3d Q(points[1][0], points[1][1], points[1][2]);
+            Vector3d R(points[2][0], points[2][1], points[2][2]);
+
+            Vector3d PQ = Q - P;
+            Vector3d PR = R - P;
+
+            Vector3d abc = PQ.cross(PR);
+            float d = abc.dot(P);
+        
+            Vector4d q(abc[0], abc[1], abc[2], d);
+            q.normalized();
+
+            Quadricd qi(q[0], q[1], q[2], q[3]);
+
+            quadric(mesh, v_it) += qi;
+
+        }
+        
+        quadric(mesh, v_it) = quadric(mesh, v_it)(pm);
+
+ //---------------------------------------------------------------------------------------------------
 	}
     std::cout << "Finished init" << std::endl;
 }
@@ -147,7 +185,12 @@ float priority(Mesh &mesh, Mesh::HalfedgeHandle _heh) {
 	// INSERT CODE HERE FOR PART 2---------------------------------------------------------------------------------
 	// return priority: the smaller the better
 	// use quadrics to estimate approximation error
-	// -------------------------------------------------------------------------------------------------------------
+	//
+
+    quadric(mesh, mesh.to_vertex_handle(_heh));
+    Vec3f v2 = mesh.point(mesh.from_vertex_handle(_heh));
+
+    Vector3d vj(meshVj[0], meshVj[1], meshVj[2]);  -------------------------------------------------------------------------------------------------------------
     
    return 1.0;
 }
