@@ -7,6 +7,7 @@
 using namespace OpenMesh;
 using namespace Eigen;
 
+
 VPropHandleT<Quadricd> vquadric;
 VPropHandleT<float> vprio;
 VPropHandleT<Mesh::HalfedgeHandle> vtarget;
@@ -93,11 +94,24 @@ void initDecimation(Mesh &mesh) {
 		//
         Vec3f pm = mesh.point(v_it.handle());
         Vector4f p(pm[0], pm[1], pm[2], 1);
+        Vector3d point(pm[0], pm[1], pm[2]);
 
         OpenMesh::Vec3f points[2];
 
         for(Mesh::VertexFaceIter f_it = mesh.vf_iter(v_it.handle()); f_it; ++f_it) {
 
+            //a plane can be defined by a normal and the point
+            //this will be <a, b, c>
+            Vec3f normal = mesh.normal(f_it.handle());
+            //nomalize so a^2+b^2+c^2 = 1
+            normal.normalized();
+
+            Vector3d abc(normal[0], normal[1], normal[2]);
+
+            //-d = ax + by + cz
+            double d = -point.dot(abc);
+
+/*
             Mesh::ConstFaceVertexIter cfv_it;
             cfv_it = mesh.cfv_iter(f_it.handle());
             points[0] = mesh.point(cfv_it.handle());
@@ -117,13 +131,16 @@ void initDecimation(Mesh &mesh) {
             Vector4d q(abc[0], abc[1], abc[2], d);
             q.normalized();
 
+*/
+            Vector4d q(abc[0], abc[1], abc[2], d);
+
             Quadricd qi(q[0], q[1], q[2], q[3]);
 
             quadric(mesh, v_it) += qi;
 
         }
         
-        quadric(mesh, v_it) = quadric(mesh, v_it)(pm);
+        //quadric(mesh, v_it) = quadric(mesh, v_it)(pm);
 
  //---------------------------------------------------------------------------------------------------
 	}
@@ -187,12 +204,23 @@ float priority(Mesh &mesh, Mesh::HalfedgeHandle _heh) {
 	// use quadrics to estimate approximation error
 	//
 
-    quadric(mesh, mesh.to_vertex_handle(_heh));
-    Vec3f v2 = mesh.point(mesh.from_vertex_handle(_heh));
+    Quadricd Q1Q2 = quadric(mesh, mesh.to_vertex_handle(_heh));
+    Q1Q2 += quadric(mesh, mesh.from_vertex_handle(_heh));
 
-    Vector3d vj(meshVj[0], meshVj[1], meshVj[2]);  -------------------------------------------------------------------------------------------------------------
+    Vec3f vt_mesh = mesh.point(mesh.to_vertex_handle(_heh));
+    Vec3f vf_mesh = mesh.point(mesh.from_vertex_handle(_heh));
     
-   return 1.0;
+
+    Vector3d vt(vt_mesh[0], vt_mesh[1], vt_mesh[2]);
+    Vector3d vf(vf_mesh[0], vf_mesh[1], vf_mesh[2]);
+
+    //currently I am just using one of the points instead of the least error
+    
+    float err = Q1Q2(vt_mesh);
+
+    //-------------------------------------------------------------------------------------------------------------
+    
+   return err;
 }
 
 void enqueue_vertex(Mesh &mesh, Mesh::VertexHandle _vh) {
@@ -249,6 +277,27 @@ void decimate(Mesh &mesh, unsigned int _n_vertices) {
 	//   2) collapse this halfedge
 	//   3) update queue
 	// --------------------------------------------------------------------------------------------------------------
+
+    while(nv > _n_vertices) {
+        for (std::set<Mesh::VertexHandle, VertexCmp>::iterator queue_it = queue.begin(); queue_it != queue.end(); ++queue_it) {
+            from = *queue_it;
+            hh = target(mesh, from);
+            
+            if (is_collapse_legal(mesh,hh)) {
+                break;
+            }
+        }
+
+        to = mesh.to_vertex_handle(hh);
+        quadric(mesh, to) += quadric(mesh, from);
+
+        mesh.collapse(hh);
+        enqueue_vertex(mesh, to);
+        for(vv_it = mesh.vv_iter(to); vv_it; ++vv_it) {
+            enqueue_vertex(mesh, vv_it.handle());
+        }
+        nv--;
+    }
 
 
 

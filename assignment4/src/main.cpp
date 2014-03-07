@@ -14,6 +14,10 @@ using namespace std;
 using namespace OpenMesh;
 using namespace Eigen;
 
+
+#define dervThres 3000
+#define angThres 0.3
+
 VPropHandleT<double> viewCurvature;
 FPropHandleT<Vec3f> viewCurvatureDerivative;
 VPropHandleT<CurvatureInfo> curvature;
@@ -33,6 +37,65 @@ void renderSuggestiveContours(Vec3f actualCamPos) { // use this camera position 
 	glColor3f(.5,.5,.5);
 	
 	// RENDER SUGGESTIVE CONTOURS HERE -----------------------------------------------------------------------------
+
+    for (Mesh::ConstFaceIter f_it=mesh.faces_begin(); f_it != mesh.faces_end(); ++f_it) {
+
+        Vec3f deriv = mesh.property(viewCurvatureDerivative, f_it);
+        Vector3d derivative(deriv[0], deriv[1], deriv[2]);
+
+        Mesh::FaceVertexIter fv_it =mesh.fv_iter(f_it);
+        
+        float c1 =mesh.property(viewCurvature, fv_it);
+        Vec3f v1 =mesh.point(fv_it.handle());
+        float c2 =mesh.property(viewCurvature, ++fv_it);
+        Vec3f v2 =mesh.point(fv_it.handle());
+        float c3 =mesh.property(viewCurvature, ++fv_it);
+        Vec3f v3 =mesh.point(fv_it.handle());
+
+        Vec3f fCentroid = v1 + v2 + v3;
+        fCentroid = ((float)1.0/3)*fCentroid;
+        
+
+        //the view of the triangle
+        Vector3d view(fCentroid[0]-actualCamPos[0], fCentroid[1]-actualCamPos[1], fCentroid[2]-actualCamPos[2]);
+        view = view.normalized();
+
+        
+        if(derivative.dot(view) > dervThres) {
+            Vec3f normal = mesh.normal(f_it.handle());
+            Vector3d surfaceNorm(normal[0], normal[1], normal[2]);
+
+            float cosine = surfaceNorm.dot(view);
+            //between desired legal angles
+            if(abs(cosine) < 1-angThres) {
+                
+                //different curvture directions
+                //inflection point
+                std::vector<Vec3f> edges;
+                if (c1*c2 < 0) {
+                    Vec3f curvPoint12 = (v1 * c2 - v2 * c1) / (c2 - c1);
+                    edges.push_back(curvPoint12);
+                }
+                if (c1*c3 < 0) {
+                    Vec3f curvPoint13 = (v1 * c3 - v3 * c1) / (c3 - c1);
+                    edges.push_back(curvPoint13);
+                }
+                if (c2*c3 < 0) {
+                    Vec3f curvPoint23 = (v2 * c3 - v3 * c2) / (c3 - c2);
+                    edges.push_back(curvPoint23);
+                }
+
+                if (edges.size() == 2) {
+                    glBegin(GL_LINES);
+                    glVertex3f(edges[0][0], edges[0][1], edges[0][2]);
+                    glVertex3f(edges[1][0], edges[1][1], edges[1][2]);
+                    glEnd();
+                }
+            }
+        }
+
+    }
+
 	// -------------------------------------------------------------------------------------------------------------
 }
 
@@ -46,6 +109,67 @@ void renderMesh() {
 	glEnable(GL_NORMALIZE);
 	
 	// WRITE CODE HERE TO RENDER THE TRIANGLES OF THE MESH ---------------------------------------------------------
+
+//flat shading. this should be removed before submission
+        OpenMesh::Vec3f point[2];
+        //OpenMesh::Vec3f normals[2];
+        OpenMesh::Vec3f faceNorm[2];
+        
+
+      for(Mesh::FaceIter it = mesh.faces_begin(); it !=
+                    mesh.faces_end(); ++it) {
+
+        faceNorm[0] =mesh.normal(it.handle());
+        
+            Mesh::ConstFaceVertexIter cfv_it;
+            cfv_it =mesh.cfv_iter(it.handle());
+            point[0] =mesh.point(cfv_it.handle());
+            //normals[0] =mesh.normal(cfv_it.handle());
+            point[1] =mesh.point((++cfv_it).handle());
+            //normals[1] =mesh.point(cfv_it.handle());
+            point[2] =mesh.point((++cfv_it).handle());
+            //normals[2] =mesh.point(cfv_it.handle());
+            
+            glBegin(GL_TRIANGLES);
+            
+            glNormal3f(faceNorm[0][0], faceNorm[0][1], faceNorm[0][2]);
+            glVertex3f(point[0][0],point[0][1],point[0][2]);
+            glVertex3f(point[1][0],point[1][1],point[1][2]);
+            glVertex3f(point[2][0],point[2][1],point[2][2]);
+
+            glEnd();
+
+        }
+
+
+/*
+        std::vector<unsigned int> indices;
+          indices.clear();
+          indices.reserve(mesh.n_faces()*3);
+
+      for(Mesh::FaceIter f_it = mesh.faces_begin(); f_it !=
+                    mesh.faces_end(); ++f_it) {
+          
+            Mesh::ConstFaceVertexIter cfv_it;
+            cfv_it =mesh.cfv_iter(f_it.handle());
+
+            indices.push_back(cfv_it.handle().idx());
+            indices.push_back((++cfv_it).handle().idx());
+            indices.push_back((++cfv_it).handle().idx());
+      }   
+
+        glEnableClientState(GL_VERTEX_ARRAY);
+        glEnableClientState(GL_NORMAL_ARRAY);
+        glVertexPointer(3, GL_FLOAT, 0, mesh.points());
+        glNormalPointer(GL_FLOAT, 0, mesh.vertex_normals());
+
+        glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT,
+        &indices[0]);
+        
+        glDisableClientState(GL_VERTEX_ARRAY);
+        glDisableClientState(GL_NORMAL_ARRAY);
+*/
+
 	// -------------------------------------------------------------------------------------------------------------
 	
 	if (!showSurface) glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE);
@@ -73,6 +197,25 @@ void renderMesh() {
 	
 	if (showCurvature) {
 		// WRITE CODE HERE TO RENDER THE PRINCIPAL DIRECTIONS YOU COMPUTED ---------------------------------------------
+
+		glBegin(GL_LINES);
+		for (Mesh::ConstVertexIter it = mesh.vertices_begin(); it != mesh.vertices_end(); ++it) {
+			Vec3f p = mesh.point(it.handle());
+			CurvatureInfo info = mesh.property(curvature, it.handle());
+
+            Vec3f Tone = p + info.directions[0]*.01;
+            Vec3f Ttwo = p + info.directions[1]*.01;
+            Vec3f Pone = p - info.directions[0]*.01;
+            Vec3f Ptwo = p - info.directions[1]*.01;
+    		glColor3f(1,0,0);
+			glVertex3f(Pone[0],Pone[1],Pone[2]);
+			glVertex3f(Tone[0],Tone[1],Tone[2]);
+    		glColor3f(0,0,1);
+			glVertex3f(Ptwo[0],Ptwo[1],Ptwo[2]);
+			glVertex3f(Ttwo[0],Ttwo[1],Ttwo[2]);
+		}
+		glEnd();
+
 		// -------------------------------------------------------------------------------------------------------------
 	}
 	
@@ -218,7 +361,7 @@ int main(int argc, char** argv) {
 	cout << '\t' << mesh.n_edges() << " edges.\n";
 	cout << '\t' << mesh.n_faces() << " faces.\n";
 	
-	//simplify(mesh,.5f);
+	//simplify(mesh,.1f);
 	
 	mesh.update_normals();
 	
