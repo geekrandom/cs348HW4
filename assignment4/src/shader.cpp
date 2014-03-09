@@ -1,14 +1,6 @@
-/*
- *  Shader.cpp
- *  CS248-Final-Project
- *
- *  Created by Matthew Fichman on 1/25/11.
- *  Copyright 2011 __MyCompanyName__. All rights reserved.
- *
- */
-
 #include "shader.h"
 #include <fstream>
+using namespace std;
 
 #define ERROR_BUFSIZE 1024
 
@@ -29,7 +21,7 @@ Shader::Shader(const std::string& path) :
 	fragmentShaderID_ = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fragmentShaderID_, 1, source, &length);
     glCompileShader(fragmentShaderID_);
-		
+    
 	// Load the vertex shader and compile
 	std::vector<char> vertexSource = readSource(path + ".vert.glsl");
 	source[0] = &vertexSource.front();

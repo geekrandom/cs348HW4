@@ -1,14 +1,15 @@
 include makefile.in
 
-INCLUDE = -I$(OPENMESH_INCLUDE_DIR) -Iinclude/ -I$(EIGEN_DIR)
+INCLUDE = -I$(OPENMESH_INCLUDE_DIR) -Iinclude/ -I$(EIGEN_DIR) -I$(GLEWROOTDIR)/include
 CPPFLAGS = -O3 -fPIC -DEIGEN_PERMANENTLY_DISABLE_STUPID_WARNINGS -DEIGEN_YES_I_KNOW_SPARSE_MODULE_IS_NOT_STABLE_YET 
-LDFLAGS = -O3 -lGL -lGLU
-LIB = -lglut -lOpenMeshCored -lOpenMeshToolsd -Wl -glew32,-rpath,$(OPENMESH_LIB_DIR)
+LDFLAGS = -O3 -lGL -lGLU -lGLEW -lglut
+LIB = -lglut -lOpenMeshCored -lOpenMeshToolsd -Wl,-rpath,$(OPENMESH_LIB_DIR) -Wl,-rpath,$(GLEWROOTDIR)/lib
 TARGET = drawMesh
 OBJS = objs/main.o objs/curvature.o objs/mesh_features.o objs/image_generation.o objs/decimate.o objs/shader.o
 
+
 default: $(OBJS)
-	$(LD) $(OBJS) $(LDFLAGS) -L$(OPENMESH_LIB_DIR) $(LIB) -o $(TARGET)
+	$(LD) $(OBJS) $(LDFLAGS) -L$(OPENMESH_LIB_DIR) -L$(GLEWROOTDIR)/lib $(LIB) -o $(TARGET)
 	
 objs/main.o: src/main.cpp
 	$(CPP) -c $(CPPFLAGS) src/main.cpp -o objs/main.o $(INCLUDE)
