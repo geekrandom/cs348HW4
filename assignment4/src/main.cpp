@@ -37,9 +37,11 @@ float specular[] = { 1.0, 1.0, 1.0, 1.0 };
 float shininess[] = { 50.0 };
 
 void renderSuggestiveContours(Vec3f actualCamPos) { // use this camera position to account for panning etc.
-	glColor3f(.1,.1,.1);
+	glColor3f(0,20,0);
+    glLineWidth(3);
 	
-	// RENDER SUGGESTIVE CONTOURS HERE -----------------------------------------------------------------------------
+	// RENDER SUGGESTIVE CONTOURS HERE
+    // ----------------------------------------------------
 
     for (Mesh::ConstFaceIter f_it=mesh.faces_begin(); f_it != mesh.faces_end(); ++f_it) {
 
@@ -107,9 +109,9 @@ void renderMesh() {
 	glUseProgram(shaderToon->programID());
 
 	glEnable(GL_LIGHTING);
-	glLightfv(GL_LIGHT0, GL_POSITION, cameraPos);
-    cout << cameraPos[0] << ", " << cameraPos[1] << ", "<< cameraPos[2] << "\n";
-    glEnable(GL_LIGHT0);
+	Vec3f actualCamPos(cameraPos[0]+pan[0],cameraPos[1]+pan[1],cameraPos[2]+pan[2]);
+    GLfloat glCamera[] = {actualCamPos[0]+2.5,actualCamPos[1]+2.5,actualCamPos[2]+2.5, 1 };
+	glLightfv(GL_LIGHT0, GL_POSITION, glCamera);
 
 	glDepthRange(0.001,1);
 	glEnable(GL_NORMALIZE);
@@ -154,9 +156,8 @@ void renderMesh() {
 	glDisable(GL_LIGHTING);
 	glDepthRange(0,0.999);
 	
-	Vec3f actualCamPos(cameraPos[0]+pan[0],cameraPos[1]+pan[1],cameraPos[2]+pan[2]);
 	renderSuggestiveContours(actualCamPos);
-	
+	/*
 	// We'll be nice and provide you with code to render feature edges below
 	glBegin(GL_LINES);
 	glColor3f(0,0,0);
@@ -171,7 +172,7 @@ void renderMesh() {
 			glVertex3f(target[0],target[1],target[2]);
 		}
 	glEnd();
-	
+	*/
 	if (showCurvature) {
 		// WRITE CODE HERE TO RENDER THE PRINCIPAL DIRECTIONS YOU COMPUTED 
         //---------------------------------------------
