@@ -110,7 +110,7 @@ void renderMesh() {
 	
 	// WRITE CODE HERE TO RENDER THE TRIANGLES OF THE MESH ---------------------------------------------------------
 
-//flat shading. this should be removed before submission
+        //flat shading. this should be removed before submission
         OpenMesh::Vec3f point[2];
         //OpenMesh::Vec3f normals[2];
         OpenMesh::Vec3f faceNorm[2];

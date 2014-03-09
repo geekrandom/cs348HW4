@@ -3,9 +3,9 @@ include makefile.in
 INCLUDE = -I$(OPENMESH_INCLUDE_DIR) -Iinclude/ -I$(EIGEN_DIR)
 CPPFLAGS = -O3 -fPIC -DEIGEN_PERMANENTLY_DISABLE_STUPID_WARNINGS -DEIGEN_YES_I_KNOW_SPARSE_MODULE_IS_NOT_STABLE_YET 
 LDFLAGS = -O3 -lGL -lGLU
-LIB = -lglut -lOpenMeshCored -lOpenMeshToolsd -Wl,-rpath,$(OPENMESH_LIB_DIR)
+LIB = -lglut -lOpenMeshCored -lOpenMeshToolsd -Wl -glew32,-rpath,$(OPENMESH_LIB_DIR)
 TARGET = drawMesh
-OBJS = objs/main.o objs/curvature.o objs/mesh_features.o objs/image_generation.o objs/decimate.o
+OBJS = objs/main.o objs/curvature.o objs/mesh_features.o objs/image_generation.o objs/decimate.o objs/shader.o
 
 default: $(OBJS)
 	$(LD) $(OBJS) $(LDFLAGS) -L$(OPENMESH_LIB_DIR) $(LIB) -o $(TARGET)
@@ -24,6 +24,9 @@ objs/image_generation.o: src/image_generation.cpp
 
 objs/decimate.o: src/decimate.cpp
 	$(CPP) -c $(CPPFLAGS) src/decimate.cpp -o objs/decimate.o $(INCLUDE)
+
+objs/shader.o: src/shader.cpp
+	$(CPP) -c $(CPPFLAGS) src/shader.cpp -o objs/shader.o $(INCLUDE)
 
 clean:
 	rm $(OBJS) $(TARGET) -f
