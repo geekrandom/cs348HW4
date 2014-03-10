@@ -17,13 +17,16 @@ using namespace OpenMesh;
 using namespace Eigen;
 
 
-#define dervThresContour 1.2
-#define dervThresHighlight 2.8
-#define angThres 0.5
+#define dervThresContour .1
+#define dervThresHighlight 40
+#define angThres 0.2
+#define curveEsp .001
 #define ePH 0.3
 
 VPropHandleT<double> viewCurvature;
 FPropHandleT<Vec3f> viewCurvatureDerivative;
+VPropHandleT<double> viewCurvaturePerp;
+FPropHandleT<Vec3f> viewCurvaturePerpDerivative;
 VPropHandleT<CurvatureInfo> curvature;
 Mesh mesh;
 Shader *shaderToon;
@@ -33,14 +36,15 @@ int lastPos[2];
 float cameraPos[4] = {0,0,4,1};
 Vec3f up, pan;
 int windowWidth = 640, windowHeight = 480;
-bool showSurface = true, showSHighlights = true, showAxes = false, showCurvature = false, showNormals = false;
+bool showSurface = true, showSHighlights = true, showAxes = false;
+bool showCurvature = false, showNormals = false;
 
 float specular[] = { 1.0, 1.0, 1.0, 1.0 };
 float shininess[] = { 50.0 };
 
 void renderSuggestive(Vec3f actualCamPos, bool renderContours) { 
     if(renderContours){
-        glColor3f(0,0,0);
+        glColor3f(1,0,0);
     }else{
         glColor3f(1,1,1);
     }
@@ -48,7 +52,6 @@ void renderSuggestive(Vec3f actualCamPos, bool renderContours) {
     // use this camera position to account for panning etc.
 	// RENDER SUGGESTIVE CONTOURS HERE
     // ----------------------------------------------------
-
     for (Mesh::ConstFaceIter f_it=mesh.faces_begin(); f_it != mesh.faces_end(); ++f_it) {
         Vec3f deriv = mesh.property(viewCurvatureDerivative, f_it);
         Vector3d derivative(deriv[0], deriv[1], deriv[2]);
@@ -60,38 +63,43 @@ void renderSuggestive(Vec3f actualCamPos, bool renderContours) {
         Vec3f v2 =mesh.point(fv_it.handle());
         float c3 =mesh.property(viewCurvature, ++fv_it);
         Vec3f v3 =mesh.point(fv_it.handle());
-
+        
         Vec3f fCentroid = v1 + v2 + v3;
         fCentroid = ((float)1.0/3)*fCentroid;
         
         //the view of the triangle
-        Vector3d view(actualCamPos[0]-fCentroid[0], actualCamPos[1]-fCentroid[1], actualCamPos[2]-fCentroid[2]);
+        Vector3d view(actualCamPos[0]-fCentroid[0], actualCamPos[1]-fCentroid[1], \
+            actualCamPos[2]-fCentroid[2]);
         view = view.normalized();
+
         Vec3f normal = mesh.normal(f_it.handle());
         Vector3d surfaceNorm(normal[0], normal[1], normal[2]);
         surfaceNorm = surfaceNorm.normalized();
 
         Vector3d w = view - surfaceNorm * view.dot(surfaceNorm);
-        w = w.normalized();
-        
-        if((renderContours && derivative.dot(w) > dervThresContour) || (!renderContours && derivative.dot(w) < -dervThresHighlight)) {
+        //w = w.normalized();
+        if((renderContours && derivative.dot(w) < -dervThresContour) || \
+        (!renderContours && derivative.dot(w) > dervThresHighlight)) {
             float cosine = surfaceNorm.dot(view);
             //between desired legal angles
-            if(abs(cosine) > angThres) {
+            if(cosine > angThres) {
                 //different curvture directions
                 //inflection point
                 std::vector<Vec3f> edges;
                 // checking if the change in sign appears along which edge.
-                if (c1*c2 < 0) {
-                    Vec3f curvPoint12 = (v1 * c2 - v2 * c1) / (c2 - c1);
+                if (c1*c2 <= curveEsp) {
+                    double sum = abs(c2) + abs(c1);
+                    Vec3f curvPoint12 = (v1 * abs(c1) + v2 * abs(c2)) / sum;
                     edges.push_back(curvPoint12);
                 }
-                if (c1*c3 < 0) {
-                    Vec3f curvPoint13 = (v1 * c3 - v3 * c1) / (c3 - c1);
+                if (c1*c3 <= curveEsp) {
+                    double sum = abs(c3) + abs(c1);
+                    Vec3f curvPoint13 = (v1 * abs(c1) + v3 * abs(c3)) / sum;
                     edges.push_back(curvPoint13);
                 }
-                if (c2*c3 < 0) {
-                    Vec3f curvPoint23 = (v2 * c3 - v3 * c2) / (c3 - c2);
+                if (c2*c3 <= curveEsp) {
+                    double sum = abs(c2) + abs(c3);
+                    Vec3f curvPoint23 = (v3 * abs(c3) + v2 * abs(c2)) / sum;
                     edges.push_back(curvPoint23);
                 }
 
@@ -155,7 +163,7 @@ void renderMesh() {
 	glDepthRange(0,0.999);
 	
 	renderSuggestive(actualCamPos, true);
-	renderSuggestive(actualCamPos, false);
+    if(showSHighlights)	renderSuggestive(actualCamPos, false);
 	
 	// We'll be nice and provide you with code to render feature edges below
 	glBegin(GL_LINES);
@@ -235,7 +243,8 @@ void display() {
 	
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
-	gluLookAt(cameraPos[0]+pan[0], cameraPos[1]+pan[1], cameraPos[2]+pan[2], pan[0], pan[1], pan[2], up[0], up[1], up[2]);
+	gluLookAt(cameraPos[0]+pan[0], cameraPos[1]+pan[1], cameraPos[2]+pan[2], \
+        pan[0], pan[1], pan[2], up[0], up[1], up[2]);
 	
 	// Draw mesh
 	renderMesh();
@@ -290,7 +299,8 @@ void mouseMoved(int x, int y) {
 	lastPos[1] = y;
 	
 	Vec3f actualCamPos(cameraPos[0]+pan[0],cameraPos[1]+pan[1],cameraPos[2]+pan[2]);
-	computeViewCurvature(mesh,actualCamPos,curvature,viewCurvature,viewCurvatureDerivative);
+	computeViewCurvature(mesh,actualCamPos,curvature,viewCurvature,viewCurvatureDerivative,\
+        viewCurvaturePerp,viewCurvaturePerpDerivative);
 	
 	glutPostRedisplay();
 }
@@ -303,7 +313,8 @@ void keyboard(unsigned char key, int x, int y) {
 	else if (key == 'a' || key == 'A') showAxes = !showAxes;
 	else if (key == 'c' || key == 'C') showCurvature = !showCurvature;
 	else if (key == 'n' || key == 'N') showNormals = !showNormals;
-	else if (key == 'w' || key == 'W') writeImage(mesh, windowWidth, windowHeight, "renderedImage.svg", actualCamPos);
+	else if (key == 'w' || key == 'W') writeImage(mesh, windowWidth, \
+        windowHeight, "renderedImage.svg", actualCamPos);
 	else if (key == 'q' || key == 'Q') exit(0);
 	glutPostRedisplay();
 }
@@ -344,6 +355,8 @@ int main(int argc, char** argv) {
 	
 	mesh.add_property(viewCurvature);
 	mesh.add_property(viewCurvatureDerivative);
+	mesh.add_property(viewCurvaturePerp);
+	mesh.add_property(viewCurvaturePerpDerivative);
 	mesh.add_property(curvature);
 	
 	// Move center of mass to origin
@@ -363,7 +376,8 @@ int main(int argc, char** argv) {
 	pan = Vec3f(0,0,0);
 	
 	Vec3f actualCamPos(cameraPos[0]+pan[0],cameraPos[1]+pan[1],cameraPos[2]+pan[2]);
-	computeViewCurvature(mesh,actualCamPos,curvature,viewCurvature,viewCurvatureDerivative);
+	computeViewCurvature(mesh,actualCamPos,curvature,viewCurvature,viewCurvatureDerivative,\
+        viewCurvaturePerp,viewCurvaturePerpDerivative);
 
 	glutInit(&argc, argv); 
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH); 
