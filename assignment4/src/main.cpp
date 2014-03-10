@@ -17,8 +17,10 @@ using namespace OpenMesh;
 using namespace Eigen;
 
 
-#define dervThres 3000
-#define angThres 0.3
+#define dervThresContour 1.2
+#define dervThresHighlight 2.8
+#define angThres 0.5
+#define ePH 0.3
 
 VPropHandleT<double> viewCurvature;
 FPropHandleT<Vec3f> viewCurvatureDerivative;
@@ -31,23 +33,25 @@ int lastPos[2];
 float cameraPos[4] = {0,0,4,1};
 Vec3f up, pan;
 int windowWidth = 640, windowHeight = 480;
-bool showSurface = true, showAxes = true, showCurvature = false, showNormals = false;
+bool showSurface = true, showSHighlights = true, showAxes = false, showCurvature = false, showNormals = false;
 
 float specular[] = { 1.0, 1.0, 1.0, 1.0 };
 float shininess[] = { 50.0 };
 
-void renderSuggestiveContours(Vec3f actualCamPos) { // use this camera position to account for panning etc.
-	glColor3f(0,20,0);
-    glLineWidth(3);
-	
+void renderSuggestive(Vec3f actualCamPos, bool renderContours) { 
+    if(renderContours){
+        glColor3f(0,0,0);
+    }else{
+        glColor3f(1,1,1);
+    }
+    glLineWidth(1.5);
+    // use this camera position to account for panning etc.
 	// RENDER SUGGESTIVE CONTOURS HERE
     // ----------------------------------------------------
 
     for (Mesh::ConstFaceIter f_it=mesh.faces_begin(); f_it != mesh.faces_end(); ++f_it) {
-
         Vec3f deriv = mesh.property(viewCurvatureDerivative, f_it);
         Vector3d derivative(deriv[0], deriv[1], deriv[2]);
-
         Mesh::FaceVertexIter fv_it =mesh.fv_iter(f_it);
         
         float c1 =mesh.property(viewCurvature, fv_it);
@@ -60,23 +64,24 @@ void renderSuggestiveContours(Vec3f actualCamPos) { // use this camera position 
         Vec3f fCentroid = v1 + v2 + v3;
         fCentroid = ((float)1.0/3)*fCentroid;
         
-
         //the view of the triangle
-        Vector3d view(fCentroid[0]-actualCamPos[0], fCentroid[1]-actualCamPos[1], fCentroid[2]-actualCamPos[2]);
+        Vector3d view(actualCamPos[0]-fCentroid[0], actualCamPos[1]-fCentroid[1], actualCamPos[2]-fCentroid[2]);
         view = view.normalized();
+        Vec3f normal = mesh.normal(f_it.handle());
+        Vector3d surfaceNorm(normal[0], normal[1], normal[2]);
+        surfaceNorm = surfaceNorm.normalized();
 
+        Vector3d w = view - surfaceNorm * view.dot(surfaceNorm);
+        w = w.normalized();
         
-        if(derivative.dot(view) > dervThres) {
-            Vec3f normal = mesh.normal(f_it.handle());
-            Vector3d surfaceNorm(normal[0], normal[1], normal[2]);
-
+        if((renderContours && derivative.dot(w) > dervThresContour) || (!renderContours && derivative.dot(w) < -dervThresHighlight)) {
             float cosine = surfaceNorm.dot(view);
             //between desired legal angles
-            if(abs(cosine) < 1-angThres) {
-                
+            if(abs(cosine) > angThres) {
                 //different curvture directions
                 //inflection point
                 std::vector<Vec3f> edges;
+                // checking if the change in sign appears along which edge.
                 if (c1*c2 < 0) {
                     Vec3f curvPoint12 = (v1 * c2 - v2 * c1) / (c2 - c1);
                     edges.push_back(curvPoint12);
@@ -98,14 +103,13 @@ void renderSuggestiveContours(Vec3f actualCamPos) { // use this camera position 
                 }
             }
         }
-
     }
-
-	// -------------------------------------------------------------------------------------------------------------
+	// ----------------------------------------------------------------------
 }
 
 void renderMesh() {
-    if (!showSurface) glColorMask(GL_FALSE,GL_FALSE,GL_FALSE,GL_FALSE); // render regardless to remove hidden lines
+    if (!showSurface) glColorMask(GL_FALSE,GL_FALSE,GL_FALSE,GL_FALSE); 
+    // render regardless to remove hidden lines
 	glUseProgram(shaderToon->programID());
 
 	glEnable(GL_LIGHTING);
@@ -119,11 +123,8 @@ void renderMesh() {
 	// WRITE CODE HERE TO RENDER THE TRIANGLES OF THE MESH  
     //---------------------------------------------------------
 
-    //flat shading. this should be removed before submission
     OpenMesh::Vec3f point[2];
-    //OpenMesh::Vec3f normals[2];
     OpenMesh::Vec3f faceNorm[2];
-    
 
     for(Mesh::FaceIter it = mesh.faces_begin(); it !=
                 mesh.faces_end(); ++it) {
@@ -133,11 +134,8 @@ void renderMesh() {
         Mesh::ConstFaceVertexIter cfv_it;
         cfv_it =mesh.cfv_iter(it.handle());
         point[0] =mesh.point(cfv_it.handle());
-        //normals[0] =mesh.normal(cfv_it.handle());
         point[1] =mesh.point((++cfv_it).handle());
-        //normals[1] =mesh.point(cfv_it.handle());
         point[2] =mesh.point((++cfv_it).handle());
-        //normals[2] =mesh.point(cfv_it.handle());
         
         glBegin(GL_TRIANGLES);
         
@@ -148,20 +146,21 @@ void renderMesh() {
 
         glEnd();
     }
-
 	// -------------------------------------------------------------
 	
 	if (!showSurface) glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE);
 	
+	glUseProgram(0);
 	glDisable(GL_LIGHTING);
 	glDepthRange(0,0.999);
 	
-	renderSuggestiveContours(actualCamPos);
-	/*
+	renderSuggestive(actualCamPos, true);
+	renderSuggestive(actualCamPos, false);
+	
 	// We'll be nice and provide you with code to render feature edges below
 	glBegin(GL_LINES);
 	glColor3f(0,0,0);
-	glLineWidth(2.0f);
+	glLineWidth(1.5f);
 	for (Mesh::ConstEdgeIter it = mesh.edges_begin(); it != mesh.edges_end(); ++it)
 		if (isFeatureEdge(mesh,*it,actualCamPos)) {
 			Mesh::HalfedgeHandle h0 = mesh.halfedge_handle(it,0);
@@ -172,11 +171,10 @@ void renderMesh() {
 			glVertex3f(target[0],target[1],target[2]);
 		}
 	glEnd();
-	*/
+	
 	if (showCurvature) {
 		// WRITE CODE HERE TO RENDER THE PRINCIPAL DIRECTIONS YOU COMPUTED 
         //---------------------------------------------
-
 		glBegin(GL_LINES);
 		for (Mesh::ConstVertexIter it = mesh.vertices_begin(); it != mesh.vertices_end(); ++it) {
 			Vec3f p = mesh.point(it.handle());
@@ -194,7 +192,6 @@ void renderMesh() {
 			glVertex3f(Ttwo[0],Ttwo[1],Ttwo[2]);
 		}
 		glEnd();
-
 		// -----------------------------------------------------------------
 	}
 	
@@ -302,6 +299,7 @@ void keyboard(unsigned char key, int x, int y) {
 	Vec3f actualCamPos(cameraPos[0]+pan[0],cameraPos[1]+pan[1],cameraPos[2]+pan[2]);
 
 	if (key == 's' || key == 'S') showSurface = !showSurface;
+	else if (key == 'h' || key == 'H') showSHighlights = !showSHighlights;
 	else if (key == 'a' || key == 'A') showAxes = !showAxes;
 	else if (key == 'c' || key == 'C') showCurvature = !showCurvature;
 	else if (key == 'n' || key == 'N') showNormals = !showNormals;
@@ -389,9 +387,7 @@ int main(int argc, char** argv) {
         exit(-1);
     }
     
-    cout << "creating toon";
     shaderToon = new Shader("shaders/toon");
-    cout << "created toon";
 	if (!shaderToon->loaded()) {
 		std::cerr << "Shader failed to load" << std::endl;
 		std::cerr << shaderToon->errors() << std::endl;

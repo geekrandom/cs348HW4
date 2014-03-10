@@ -89,7 +89,8 @@ void initDecimation(Mesh &mesh) {
 		quadric(mesh, v_it).clear();
 		sum = 0;                            // Reset for each iteration
 
-        // INSERT CODE HERE FOR PART 1-------------------------------------------------------------------------------
+        // INSERT CODE HERE FOR PART 1
+        //------------------------------------------------------------
 		// calc vertex quadrics from incident triangles
 		//
         Vec3f pm = mesh.point(v_it.handle());
@@ -111,27 +112,6 @@ void initDecimation(Mesh &mesh) {
             //-d = ax + by + cz
             double d = -point.dot(abc);
 
-/*
-            Mesh::ConstFaceVertexIter cfv_it;
-            cfv_it = mesh.cfv_iter(f_it.handle());
-            points[0] = mesh.point(cfv_it.handle());
-            points[1] = mesh.point((++cfv_it).handle());
-            points[2] = mesh.point((++cfv_it).handle());
-    
-            Vector3d P(points[0][0], points[0][1], points[0][2]);
-            Vector3d Q(points[1][0], points[1][1], points[1][2]);
-            Vector3d R(points[2][0], points[2][1], points[2][2]);
-
-            Vector3d PQ = Q - P;
-            Vector3d PR = R - P;
-
-            Vector3d abc = PQ.cross(PR);
-            float d = abc.dot(P);
-        
-            Vector4d q(abc[0], abc[1], abc[2], d);
-            q.normalized();
-
-*/
             Vector4d q(abc[0], abc[1], abc[2], d);
 
             Quadricd qi(q[0], q[1], q[2], q[3]);
@@ -139,10 +119,7 @@ void initDecimation(Mesh &mesh) {
             quadric(mesh, v_it) += qi;
 
         }
-        
-        //quadric(mesh, v_it) = quadric(mesh, v_it)(pm);
-
- //---------------------------------------------------------------------------------------------------
+        //--------------------------------------------------
 	}
     std::cout << "Finished init" << std::endl;
 }

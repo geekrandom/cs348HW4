@@ -61,11 +61,10 @@ void FindKTFromMatrix(Matrix3d m, CurvatureInfo *info) {
 
 void computeCurvature(Mesh &mesh, OpenMesh::VPropHandleT<CurvatureInfo> &curvature) {
 	for (Mesh::VertexIter it = mesh.vertices_begin(); it != mesh.vertices_end(); ++it) {
-		// WRITE CODE HERE TO COMPUTE THE CURVATURE AT THE CURRENT VERTEX ----------------------------------------------
-		// -------------------------------------------------------------------------------------------------------------
-
-
-//code from Assignment 3
+		// WRITE CODE HERE TO COMPUTE THE CURVATURE AT THE CURRENT VERTEX
+        // ----------------------------------------------
+		// -----------------------------------------------------------------------
+        //code from Assignment 3
 
 		Vec3f normal = mesh.normal(it.handle());
 		Vector3d N(normal[0],normal[1],normal[2]); 
@@ -114,51 +113,89 @@ void computeCurvature(Mesh &mesh, OpenMesh::VPropHandleT<CurvatureInfo> &curvatu
             m(0,2) += Wij * Kij * Tij[2] * Tij[0];
             m(1,2) += Wij * Kij * Tij[2] * Tij[1];
             m(2,2) += Wij * Kij * Tij[2] * Tij[2];
-
         }
         
 		CurvatureInfo info;
         FindKTFromMatrix(m, &info);
 
 		mesh.property(curvature,it) = info;
-
-
 	}
 }
 
 void computeViewCurvature(Mesh &mesh, OpenMesh::Vec3f camPos, OpenMesh::VPropHandleT<CurvatureInfo> &curvature, OpenMesh::VPropHandleT<double> &viewCurvature, OpenMesh::FPropHandleT<OpenMesh::Vec3f> &viewCurvatureDerivative) {
-	// WRITE CODE HERE TO COMPUTE CURVATURE IN THE VIEW PROJECTION PROJECTED ON THE TANGENT PLANE ------------------
+	// WRITE CODE HERE TO COMPUTE CURVATURE IN THE VIEW PROJECTION PROJECTED ON THE TANGENT PLANE 
 	// Compute vector to viewer and project onto tangent plane, then use components in principal directions to find curvature
+    for (Mesh::VertexIter it = mesh.vertices_begin(); it != mesh.vertices_end(); ++it) {
+
+        Vec3f normal = mesh.normal(it.handle());
+        Vec3f vertex = mesh.point(it.handle());
+
+		Vector3d currNormal(normal[0],normal[1],normal[2]);
+        Vector3d view(camPos[0]-vertex[0],camPos[1]-vertex[1],camPos[2]-vertex[2]);
+
+        Vector3d w = view - currNormal * view.dot(currNormal);
+        
+        //Calculate view curvature
+        double k1 = mesh.property(curvature,it).curvatures[0];
+        double k2 = mesh.property(curvature,it).curvatures[1];
+        Vec3f pd1 = mesh.property(curvature,it).directions[0];
+        Vector3d direction1(pd1[0],pd1[1],pd1[2]);
+    
+        double viewCurv = k1*direction1.dot(w)*direction1.dot(w) + k2*(1-(direction1.dot(w)*direction1.dot(w)));
+    
+        mesh.property(viewCurvature,it) = viewCurv;
+    }
 
 
+	// --------------------------------
+	// We'll use the finite elements piecewise hat method to find per-face gradients of the view curvature
+	// CS 348a doesn't cover how to differentiate functions on a mesh (Take CS 468! Spring 2013!) so we provide code here
+	
+	for (Mesh::FaceIter it = mesh.faces_begin(); it != mesh.faces_end(); ++it) {
+		double c[3];
+		Vec3f p[3];
+		
+		Mesh::ConstFaceVertexIter fvIt = mesh.cfv_iter(it);
+		for (int i = 0; i < 3; i++) {
+			p[i] = mesh.point(fvIt.handle());
+			c[i] = mesh.property(viewCurvature,fvIt.handle());
+			++fvIt;
+		}
+		
+		Vec3f N = mesh.normal(it.handle());
+		double area = mesh.calc_sector_area(mesh.halfedge_handle(it.handle()));
+
+		mesh.property(viewCurvatureDerivative,it) = (N%(p[0]-p[2]))*(c[1]-c[0])/(2*area) + (N%(p[1]-p[0]))*(c[2]-c[0])/(2*area);
+	}
+}
+
+
+void computeViewCurvaturePerp(Mesh &mesh, OpenMesh::Vec3f camPos, OpenMesh::VPropHandleT<CurvatureInfo> &curvature, OpenMesh::VPropHandleT<double> &viewCurvature, OpenMesh::FPropHandleT<OpenMesh::Vec3f> &viewCurvatureDerivative) {
+	// WRITE CODE HERE TO COMPUTE CURVATURE IN THE VIEW PROJECTION PROJECTED ON THE TANGENT PLANE 
+	// Compute vector to viewer and project onto tangent plane, then use components in principal directions to find curvature
         for (Mesh::VertexIter it = mesh.vertices_begin(); it != mesh.vertices_end(); ++it) {
 
             Vec3f normal = mesh.normal(it.handle());
             Vec3f vertex = mesh.point(it.handle());
 
     		Vector3d currNormal(normal[0],normal[1],normal[2]);
+            Vector3d view(camPos[0]-vertex[0],camPos[1]-vertex[1],camPos[2]-vertex[2]);
 
-    		Matrix3d projection = Matrix3d::Identity() -      currNormal*currNormal.transpose();
-            
-            Vector3d viewRay(vertex[0]-camPos[0],vertex[1]-camPos[1],vertex[2]-camPos[2]);
-            Vector3d projectedRay = (projection*viewRay).normalized();
+            Vector3d w = view - currNormal * view.dot(currNormal);
             
             //Calculate view curvature
             double k1 = mesh.property(curvature,it).curvatures[0];
             double k2 = mesh.property(curvature,it).curvatures[1];
             Vec3f pd1 = mesh.property(curvature,it).directions[0];
-            Vec3f pd2 = mesh.property(curvature,it).directions[1];
             Vector3d direction1(pd1[0],pd1[1],pd1[2]);
-            Vector3d direction2(pd2[0],pd2[1],pd2[2]);
         
-            double viewCurv = k1*direction1.dot(viewRay) + k2*direction2.dot(viewRay);
+            double viewCurv = k1*direction1.dot(w)*direction1.dot(w) + k2*(1-(direction1.dot(w)*direction1.dot(w)));
         
             mesh.property(viewCurvature,it) = viewCurv;
     }
 
 
-	// -------------------------------------------------------------------------------------------------------------
-
+	// --------------------------------
 	// We'll use the finite elements piecewise hat method to find per-face gradients of the view curvature
 	// CS 348a doesn't cover how to differentiate functions on a mesh (Take CS 468! Spring 2013!) so we provide code here
 	
