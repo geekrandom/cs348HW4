@@ -276,6 +276,7 @@ void decimate(Mesh &mesh, unsigned int _n_vertices) {
         nv--;
     }
 
+	// -----------------------------------------------------------------------------------
 
 
 	// clean up after decimation
