@@ -70,6 +70,9 @@ void FindKTFromMatrix(Matrix3d m, CurvatureInfo *info) {
             }
         }
         
+        T1 = T1.normalized();
+        T2 = T2.normalized();
+
 		// In the end you need to fill in this struct
 		info->curvatures[0] = k1;
 		info->curvatures[1] = k2;
@@ -85,7 +88,8 @@ void computeCurvature(Mesh &mesh, OpenMesh::VPropHandleT<CurvatureInfo> &curvatu
         //code from Assignment 3
 
 		Vec3f normal = mesh.normal(it.handle());
-		Vector3d N(normal[0],normal[1],normal[2]); 
+		Vector3d N(normal[0],normal[1],normal[2]);
+        N = N.normalized(); 
         // example of converting to Eigen's vector class for easier math
 
         Vec3f meshVi = mesh.point(it.handle());
@@ -116,7 +120,7 @@ void computeCurvature(Mesh &mesh, OpenMesh::VPropHandleT<CurvatureInfo> &curvatu
 
             Vector3d vjminvi = vj - vi;
             double constant = 2.0/(vjminvi.norm() * vjminvi.norm());
-            double Kij = constant * N.dot(vj - vi);
+            double Kij = constant * N.dot(vjminvi);
             double A1 = mesh.calc_sector_area(heHandle);
             double A2 = mesh.calc_sector_area(mesh.opposite_halfedge_handle(heHandle));
 

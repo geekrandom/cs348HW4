@@ -17,11 +17,11 @@ using namespace OpenMesh;
 using namespace Eigen;
 
 
-#define dervThresContour .1
-#define dervThresHighlight 80
-#define angThres 0.2
+#define dervThresContour .3
+#define dervThresHighlight .8
+#define angThres 0.3
 #define curveEsp .001
-#define threshPH 0.3
+#define threshPH 100
 
 VPropHandleT<double> viewCurvature;
 FPropHandleT<Vec3f> viewCurvatureDerivative;
@@ -35,7 +35,7 @@ float cameraPos[4] = {0,0,4,1};
 Vec3f up, pan;
 int windowWidth = 640, windowHeight = 480;
 bool showSurface = true, showAxes = false, showCurvature = false, showNormals = false;
-bool showContours = true, showSHighlights = true, showPHighlights = true;
+bool showContours = false, showSHighlights = false, showPHighlights = true;
 
 float specular[] = { 1.0, 1.0, 1.0, 1.0 };
 float shininess[] = { 50.0 };
@@ -45,8 +45,8 @@ Vector3d meshVecToCompVec(Vec3f vectorIn){
 }
 
 void draw_segment_ridge(Vector3d v0, Vector3d v1, Vector3d v2,
-			double emax0, double emax1, double emax2,
-			double kmax0, double kmax1, double kmax2){
+		double emax0, double emax1, double emax2,
+		double kmax0, double kmax1, double kmax2){
 	// Interpolate to find ridge/valley line segment endpoints
 	// in this triangle and the curvatures there
 	double w10 = abs(emax0) / (abs(emax0) + abs(emax1));
@@ -72,12 +72,7 @@ void draw_segment_ridge(Vector3d v0, Vector3d v1, Vector3d v2,
 	if (k01 == 0.0 && k12 == 0.0)
 		return;
 
-	// Fade lines
-	k01 /= (k01 + threshPH);
-	k12 /= (k12 + threshPH);
-
 	// Draw the line segment
-	glColor4f(.95, .95, .95, 1);
 	glVertex3f(p01[0], p01[1], p01[2]);
 	glVertex3f(p12[0], p12[1], p12[2]);
 }
@@ -95,6 +90,7 @@ void renderSuggestive(Vec3f actualCamPos, bool renderContours) {
     for (Mesh::ConstFaceIter f_it=mesh.faces_begin(); f_it != mesh.faces_end(); ++f_it) {
         Vec3f deriv = mesh.property(viewCurvatureDerivative, f_it);
         Vector3d derivative(deriv[0], deriv[1], deriv[2]);
+        derivative = derivative.normalized();
         Mesh::FaceVertexIter fv_it =mesh.fv_iter(f_it);
         
         float c1 =mesh.property(viewCurvature, fv_it);
@@ -135,11 +131,11 @@ void renderSuggestive(Vec3f actualCamPos, bool renderContours) {
             //surfaceNorm = surfaceNorm.normalized();
 
             Vector3d w = view - surfaceNorm * view.dot(surfaceNorm);
-            double wNorm = w.norm();
-            double DwKrOverwNorm = -derivative.dot(w)/(wNorm);
+            w = w.normalized();
+            double DwKr = -derivative.dot(w);
 
-            if((renderContours && DwKrOverwNorm > dervThresContour) || \
-            (!renderContours && DwKrOverwNorm < -dervThresHighlight)) {
+            if((renderContours && DwKr > dervThresContour) || \
+            (!renderContours && DwKr < -dervThresHighlight)) {
                 float cosine = surfaceNorm.dot(view);
                 //between desired legal angles
                 if(cosine > angThres) {
@@ -155,8 +151,7 @@ void renderSuggestive(Vec3f actualCamPos, bool renderContours) {
 }
 
 void renderPrincipalHighlights(Vec3f actualCamPos) { 
-    glColor3f(.9,.9,.9);
-
+    glColor3f(.95,.95,.95);
     for (Mesh::ConstFaceIter f_it=mesh.faces_begin(); \
     f_it != mesh.faces_end(); ++f_it) {
         Mesh::FaceVertexIter fv_it =mesh.fv_iter(f_it);
@@ -202,7 +197,7 @@ void renderPrincipalHighlights(Vec3f actualCamPos) {
             (d1.dot(dref)) < M_SQRT1_2 ||
             (d2.dot(dref)) < M_SQRT1_2)
           continue;
-
+        
         Vector3d viewdir0 = meshVecToCompVec(actualCamPos) - v0;
         Vector3d viewdir1 = meshVecToCompVec(actualCamPos) - v1;
         Vector3d viewdir2 = meshVecToCompVec(actualCamPos) - v2;
@@ -222,7 +217,7 @@ void renderPrincipalHighlights(Vec3f actualCamPos) {
 	    int z20 = (dot2*dot0 <= 0.0);
 
 	    if (z01 + z12 + z20 < 2)
-		    return;
+		    continue;
 
         double test0 = (k10 - k20)*(k10 - k20) * viewdir0.dot(n0);
         double test1 = (k11 - k21)*(k11 - k21) * viewdir1.dot(n1);
